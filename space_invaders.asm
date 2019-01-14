@@ -19,24 +19,29 @@ vector_001          dc.l    Main
 
 					org		$500
 					
-Main                lea     InvaderA_Bitmap,a0
-					lea     VIDEO_START+14+100*BYTE_PER_LINE,a1
-					jsr     CopyBitmap
+Main				move.l	#$88888888,d0
+					jsr		FillScreen
+
+					lea     InvaderA_Bitmap,a0
+					move.w	#112,d1
+					move.w	#100,d2
+					jsr     PrintBitmap
 					
 					lea     InvaderB_Bitmap,a0
-					lea     VIDEO_START+28+100*BYTE_PER_LINE,a1
-					jsr     CopyBitmap
+					move.w	#224,d1
+					jsr     PrintBitmap
 					
 					lea     InvaderC_Bitmap,a0
-					lea     VIDEO_START+42+100*BYTE_PER_LINE,a1
-					jsr     CopyBitmap
+					move.w	#336,d1
+					jsr     PrintBitmap
 					
 					lea     Ship_Bitmap,a0
-					lea     VIDEO_START+28+200*BYTE_PER_LINE,a1
-					jsr     CopyBitmap
+					move.w	#223,d1
+					move.w	#200,d2
+					jsr     PrintBitmap
 					
 					illegal
-
+					
 
 					move.l	#VIDEO_START,a1
 					
@@ -76,40 +81,6 @@ Main                lea     InvaderA_Bitmap,a0
 					adda.l	#BYTE_PER_LINE,a0
 					subi.b	#1,d1
 					bne		\rows
-					
-	
-					illegal
-
-					move.w	#2,d0
-
-\loop               jsr     WhiteSquare
-
-					addq.w	#2,d0
-					cmpi.w	#40,d0
-					bls		\loop
-					
-					illegal
-									
-					move.l	#$ffffffff,d0
-					jsr     FillScreen	
-				
-					move.l	#$f0f0f0f0,d0
-					jsr     FillScreen
-					
-					move.l	#$fff0fff0,d0
-					jsr     FillScreen
-					
-					moveq.l	#$0,d0
-					jsr     FillScreen
-					
-					jsr     HLines
-				
-					move.l	#$0,d0
-					jsr     FillScreen	
-					
-					jsr     WhiteSquare32
-					
-					jsr     WhiteSquare128
 					
 					illegal
 
@@ -237,27 +208,72 @@ PixelToByte			move.l	d2,-(a7)
 					move.l	(a7)+,d2
 					rts
 					
-CopyLine			movem.l	a1/d3,-(a7)
-\loop				move.b	(a0)+,(a1)+
-					subi.w	#1,d3
+
+;->	a0.l - address of the bitmap
+;->	a1.l - address of the destination
+;->	d0.w - offset in pixels
+;->	d3.w - width of the line in bytes
+;<-	a0.l - address od the next line
+CopyLine			movem.l	a1/d0/d1/d3,-(a7)
+\loop				clr.l	d1
+					move.b	(a0)+,d1
+					ror.w	d0,d1
+					or.b	d1,(a1)+
+					tst.w	d3
+					beq		\endofloop
+					clr.b	d1
+					rol.w	#8,d1
+					or.b	d1,(a1)
+					
+\endofloop			subi.w	#1,d3
 					bne		\loop
 					
-					movem.l	(a7)+,a1/d3
+					movem.l	(a7)+,a1/d0/d1/d3
 					rts
 
-CopyBitmap			movem.l	a0/a1/d0/d3,-(a7)
+;->	a0.l - address of the bitmap
+;->	a1.l - address of the destination
+;->	d0.w - offset in pixels
+CopyBitmap			movem.l	a0/a1/d1/d3,-(a7)
 					move.w	WIDTH(a0),d3
-					move.w	HEIGHT(a0),d0
+					move.w	HEIGHT(a0),d1
 					adda.l	#MATRIX,a0
 					jsr		PixelToByte
 \loop				jsr		CopyLine
 					adda.l	#BYTE_PER_LINE,a1
-					subi.w	#1,d0
+					subi.w	#1,d1
 					bne		\loop
 					
-					movem.l	(a7)+,a0/a1/d0/d3
+					movem.l	(a7)+,a0/a1/d1/d3
 					rts
 			
+;->	d1.w - abscissa in pixels	(x coordinate)
+;->	d2.w - ordinate in pixels	(y coordinate)
+;->	a1.l - address of the pixel
+;->	d0.w - offset of the pixels
+PixelToAdress		movem.l	d2/d1,-(a7)
+					andi.l	#$0000ffff,d1
+					
+					mulu.w	#BYTE_PER_LINE,d2
+					divu.w	#8,d1
+					add.w	d1,d2
+					swap	d1
+					move.w	d1,d0
+					movea.l	#VIDEO_START,a1
+					adda.w	d2,a1
+
+					movem.l	(a7)+,d2/d1
+					rts
+					
+;->	a0.l - address of the bitmap
+;->	d1.w - abscissa in pixels	(x coordinate)
+;->	d2.w - ordinate in pixels	(y coordinate)
+PrintBitmap			jsr		PixelToAdress
+					jsr		CopyBitmap
+					
+					rts
+					
+					
 ;------------------------------ DATA -------------------------------		
 
 InvaderA_Bitmap 	dc.w	24,16
