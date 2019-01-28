@@ -22,6 +22,14 @@ BITMAP2				equ		10
 
 HIDE				equ		0
 SHOW				equ		1
+
+;Keyboard
+SPACE_KEY			equ		$420
+LEFT_KEY			equ		$46F
+UP_KEY				equ		$470
+RIGHT_KEY			equ		$471
+DOWN_KEY			equ		$472
+
 ;----------------------------  Init  -------------------------------
 
 					org		$0
@@ -34,8 +42,14 @@ vector_001          dc.l    Main
 					
 Main				lea		Invader,a1
 
-					jsr		PrintSprite
+					move.w	#1,d1
+					move.w	#1,d2
+
+\loop				jsr		PrintSprite
 					jsr		BufferToScreen
+					
+					jsr		MoveSpriteKeyboard
+					bra		\loop
 					
 					illegal
 
@@ -61,6 +75,16 @@ ClearScreen			move.l	d0,-(a7)
 					move.l	(a7)+,d0
 					rts
 					
+PixelToByte			move.l	d2,-(a7)
+					move.l	d3,d2
+					clr		d3
+\loop				subi.w	#8,d2
+					addi.w	#1,d3
+					tst.w	d2
+					bgt		\loop
+					
+					move.l	(a7)+,d2
+					rts
 
 ;->	a0.l - address of the bitmap
 ;->	a1.l - address of the destination
@@ -143,7 +167,7 @@ BufferToScreen		movem.l	a0/a1,-(a7)
 					rts
 					
 ;->	a1.l - address of the sprite					
-PrintSprite			move.l	a1,-(a7)
+PrintSprite			movem.l	a1/d1/d2,-(a7)
 					tst.w	STATE(a1)
 					beq		\skip
 					move.w	X(a1),d1
@@ -151,14 +175,111 @@ PrintSprite			move.l	a1,-(a7)
 					movea.l	BITMAP1(a1),a0
 					
 					jsr		PrintBitmap
-\skip				move.l	(a7)+,a1
+\skip				movem.l	(a7)+,a1/d1/d2
 					rts
 					
+;->	a0.l - address of a bitamp
+;->	d1.w - X offset of a bitamp in px
+;<-	Z	 - true if out of bounds
+IsOutOfX			move.l	d0,-(a7)
+					
+					tst.w	d1
+					bmi		\out_of_bounds
+					
+					move.w	WIDTH(a0),d0
+					add.w	d1,d0
+					cmp.w	#VIDEO_WIDTH,d0
+					bgt		\out_of_bounds
+					
+\in_bounds			move.l	(a7)+,d0
+					andi.b	#%11111011,ccr
+					rts
+					
+\out_of_bounds		move.l	(a7)+,d0
+					ori.b	#%00000100,ccr
+					rts
 
+;->	a0.l - address of a bitamp
+;->	d2.w - Y offset of a bitamp in px
+;<-	Z	 - true if out of bounds
+IsOutOfY			move.l	d0,-(a7)
+					
+					tst.w	d2
+					bmi		\out_of_bounds
+					
+					move.w	HEIGHT(a0),d0
+					add.w	d2,d0
+					cmp.w	#VIDEO_HEIGHT,d0
+					bgt		\out_of_bounds
+					
+\in_bounds			move.l	(a7)+,d0
+					andi.b	#%11111011,ccr
+					rts
+					
+\out_of_bounds		move.l	(a7)+,d0
+					ori.b	#%00000100,ccr
+					rts
+					
+;->	a0.l - address of a bitamp
+;->	d1.w - X offset of a bitamp in px
+;->	d2.w - Y offset of a bitamp in px
+;<-	Z	 - true if out of bounds
+IsOutOfScreen		jsr		IsOutOfX
+					beq		\quit
+					jsr		IsOutOfY
+\quit				rts
+
+;->	a1.l - address of a sprite
+;->	d1.w - relative displacement on the X axis
+;->	d2.w - relative displacement on the Y axis
+;<-	Z	 - false if not moved - out of bounds
+MoveSprite			movem.l	d1/d2,-(a7)
+					
+					add.w	X(a1),d1
+					add.w	Y(a1),d2
+					jsr		IsOutOfScreen
+					bne		\movement
+					
+\cant_move			andi.b	#%11111011,ccr
+					bra		\quit
+					
+\movement			move.w	d1,X(a1)
+					move.w	d2,Y(a1)
+					ori.b	#%00000100,ccr
+					
+\quit				movem.l	(a7)+,d1/d2
+					rts
+					
+;->	a1.l - address of a sprite	
+MoveSpriteKeyboard	movem.l	d1/d2,-(a7)
+					
+					clr.w	d1
+					clr.w	d2
+					
+					tst.b	(LEFT_KEY)
+					beq		\skip_left
+					addi.w	#-1,d1
+					
+\skip_left			tst.b	(RIGHT_KEY)
+					beq		\skip_right
+					addi.w	#1,d1
+					
+\skip_right			tst.b	(UP_KEY)
+					beq		\skip_up
+					addi.w	#-1,d2
+					
+\skip_up			tst.b	(DOWN_KEY)
+					beq		\skip_down
+					addi.w	#1,d2
+					
+\skip_down			jsr		MoveSprite
+					
+					movem.l	(a7)+,d1/d2
+					rts
 ;------------------------------ DATA -------------------------------		
 
 
-Invader				dc.w	HIDE
+Invader				dc.w	SHOW
 					dc.w	0,152			;coordinates
 					dc.l	InvaderA_Bitmap
 					dc.l	0
