@@ -1,4 +1,4 @@
-# Epita Computer Architecture Couse S3 - S4
+# Epita Computer Architecture Course S3 - S4
 
 Solution to the year long course on Computer achiecture at Epita school in Paris.
 
