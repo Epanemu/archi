@@ -40,14 +40,24 @@ vector_001          dc.l    Main
 
 					org		$500
 					
-Main				lea		Invader,a1
+Main				lea		FixedSprite,a2
 
-					move.w	#1,d1
-					move.w	#1,d2
-
-\loop				jsr		PrintSprite
-					jsr		BufferToScreen
+\loop				movea.l	a2,a1
+					jsr		PrintSprite
 					
+					lea		MovingSprite,a1
+					jsr		PrintSprite
+					
+					jsr		IsSpriteColliding
+					bne		\notColliding
+					
+\colliding			lea		VIDEO_BUFFER,a0
+					move.w	#15,d7
+\square				move.w	#$ffff,(a0)
+					adda.l	#BYTE_PER_LINE,a0
+					dbra	d7,\square
+					
+\notColliding		jsr		BufferToScreen
 					jsr		MoveSpriteKeyboard
 					bra		\loop
 					
@@ -276,11 +286,71 @@ MoveSpriteKeyboard	movem.l	d1/d2,-(a7)
 					
 					movem.l	(a7)+,d1/d2
 					rts
+					
+;->	a0.l - Address of the sprite
+;<-	d1.w - Abscissa of the top left corner of the sprite (x)
+;<-	d2.w - Ordinate of the top left corner of the sprite (y)
+;<-	d3.w - Abscissa of the bottom right corner of the sprite (x)
+;<-	d4.w - Ordinate of the bottom right corner of the sprite (y)
+GetRectangle		move.l	a1,-(a7)
+
+					move.w	X(a0),d1
+					move.w	Y(a0),d2
+					move.l	BITMAP1(a0),a1
+					move.w	X(a0),d3
+					move.w	Y(a0),d4
+					add.w	WIDTH(a1),d3
+					add.w	HEIGHT(a1),d4
+					
+					move.l	(a7)+,a1
+					rts
+					
+;->	a1.l - Address of the first sprite
+;->	a2.l - Address of the second sprite
+;<-	Z 	 - true(1) if sprites are colliding
+IsSpriteColliding	movem.l	d0-d7/a0,-(a7)
+					
+					cmpi.w	#HIDE,STATE(a1)
+					beq		\false
+					cmpi.w	#HIDE,STATE(a2)
+					beq		\false
+					
+					movea.l	a1,a0
+					jsr		GetRectangle	;1
+					move.w	d1,d0		;left
+					move.w	d2,d5		;top
+					move.w	d3,d6		;right
+					move.w	d4,d7		;bottom
+					
+					movea.l	a2,a0
+					jsr		GetRectangle	;2
+					
+					cmp.w	d1,d6	;leftmost of 2 is to right of rightmost of 1
+					ble		\false
+					cmp.w	d2,d7	;top of 2 is bellow the bottom of 1
+					ble		\false
+					cmp.w	d3,d0	;rightmost of 2 is to left of leftmost of 1
+					bge		\false
+					cmp.w	d4,d5	;bottom of 2 is above the top of 1
+					bge		\false
+					
+\true				ori.b	#%00000100,ccr
+					jmp		\quit
+					
+\false				andi.b	#%11111011,ccr
+\quit				movem.l	(a7)+,d0-d7/a0
+					rts
+				
 ;------------------------------ DATA -------------------------------		
 
-
-Invader				dc.w	SHOW
+					
+MovingSprite		dc.w	SHOW
 					dc.w	0,152			;coordinates
+					dc.l	InvaderB_Bitmap
+					dc.l	0
+					
+FixedSprite			dc.w	SHOW
+					dc.w	228,152			;coordinates
 					dc.l	InvaderA_Bitmap
 					dc.l	0
 
@@ -353,3 +423,11 @@ Ship_Bitmap		 	dc.w	24,14
 					dc.b    %11111111,%11111111,%11111111
 					dc.b    %11111111,%11111111,%11111111
 					dc.b    %11111111,%11111111,%11111111
+					
+ShipShot_Bitmap		dc.w	2,6
+					dc.b    %11000000
+					dc.b    %11000000
+					dc.b    %11000000
+					dc.b    %11000000
+					dc.b    %11000000
+					dc.b    %11000000
