@@ -23,6 +23,10 @@ BITMAP2				equ		10
 HIDE				equ		0
 SHOW				equ		1
 
+;speed constants
+SHIP_STEP			equ		4
+SHIP_SHOT_STEP		equ		4
+
 ;Keyboard
 SPACE_KEY			equ		$420
 LEFT_KEY			equ		$46F
@@ -40,28 +44,16 @@ vector_001          dc.l    Main
 
 					org		$500
 					
-Main				lea		FixedSprite,a2
-
-\loop				movea.l	a2,a1
-					jsr		PrintSprite
+Main				jsr		PrintShip
+					jsr		PrintShipShot
+					jsr		BufferToScreen
 					
-					lea		MovingSprite,a1
-					jsr		PrintSprite
+					jsr		MoveShip
+					jsr		MoveShipShot
 					
-					jsr		IsSpriteColliding
-					bne		\notColliding
+					jsr		NewShipShot
 					
-\colliding			lea		VIDEO_BUFFER,a0
-					move.w	#15,d7
-\square				move.w	#$ffff,(a0)
-					adda.l	#BYTE_PER_LINE,a0
-					dbra	d7,\square
-					
-\notColliding		jsr		BufferToScreen
-					jsr		MoveSpriteKeyboard
-					bra		\loop
-					
-					illegal
+					bra		Main
 
 
 ;-------------------------  Subroutines  ---------------------------
@@ -245,6 +237,7 @@ IsOutOfScreen		jsr		IsOutOfX
 ;<-	Z	 - false if not moved - out of bounds
 MoveSprite			movem.l	d1/d2,-(a7)
 					
+					movea.l	BITMAP1(a1),a0
 					add.w	X(a1),d1
 					add.w	Y(a1),d2
 					jsr		IsOutOfScreen
@@ -341,8 +334,100 @@ IsSpriteColliding	movem.l	d0-d7/a0,-(a7)
 \quit				movem.l	(a7)+,d0-d7/a0
 					rts
 				
+				
+PrintShip			move.l	a1,-(a7)
+					lea		Ship,a1
+					jsr		PrintSprite
+					move.l	(a7)+,a1
+					rts
+					
+					
+MoveShip			movem.l	d1/d2/a1,-(a7)
+					
+					lea		Ship,a1
+					clr.w	d1
+					clr.w	d2
+					
+					tst.b	(LEFT_KEY)
+					beq		\skip_left
+					addi.w	#-SHIP_STEP,d1
+					
+\skip_left			tst.b	(RIGHT_KEY)
+					beq		\skip_right
+					addi.w	#SHIP_STEP,d1
+					
+\skip_right			jsr		MoveSprite
+					
+					movem.l	(a7)+,d1/d2/a1
+					rts
+					
+					
+PrintShipShot		move.l	a1,-(a7)
+					lea		ShipShot,a1
+					jsr		PrintSprite
+					move.l	(a7)+,a1
+					rts
+					
+					
+MoveShipShot		movem.l	d1/d2/a1,-(a7)
+
+					lea		ShipShot,a1
+					cmp.w	#HIDE,STATE(a1)
+					beq		\quit
+					
+					cmp.w	#SHIP_SHOT_STEP,Y(a1)
+					bge		\continue
+					move.w	#HIDE,STATE(a1)		
+					jmp		\quit
+				
+\continue			clr.w	d1
+					move.w	#-SHIP_SHOT_STEP,d2
+					
+					jsr		MoveSprite
+					
+\quit				movem.l	(a7)+,d1/d2/a1
+					rts
+					
+					
+NewShipShot			movem.l	a1/a2/d1/d2/d3,-(a7)
+					
+					tst.b	(SPACE_KEY)
+					beq		\quit
+					
+					lea		ShipShot,a1
+					cmp.w	#SHOW,STATE(a1)
+					beq		\quit
+					
+					move.w	#SHOW,STATE(a1)
+					
+					lea		Ship,a2
+					
+					;width and height
+					move.w	X(a2),d1
+					move.w	Y(a2),d2
+					
+					movea.l	BITMAP1(a2),a2
+					move.w	WIDTH(a2),d3
+					divs.w	#2,d3
+					add.w	d3,d1
+					
+					movea.l	BITMAP1(a1),a1
+					move.w	WIDTH(a1),d3
+					divs.w	#2,d3
+					sub.w	d3,d1
+					move.w	HEIGHT(a1),d3
+					sub.w	d3,d2
+					
+					lea		ShipShot,a1
+					move.w	d1,X(a1)
+					move.w	d2,Y(a1)
+					
+\quit				movem.l	(a7)+,a1/a2/d1/d2/d3
+					rts
+					
 ;------------------------------ DATA -------------------------------		
 
+;Sprites
 					
 MovingSprite		dc.w	SHOW
 					dc.w	0,152			;coordinates
@@ -353,6 +438,18 @@ FixedSprite			dc.w	SHOW
 					dc.w	228,152			;coordinates
 					dc.l	InvaderA_Bitmap
 					dc.l	0
+					
+Ship				dc.w	SHOW
+					dc.w	(VIDEO_WIDTH-24)/2,VIDEO_HEIGHT-32
+					dc.l	Ship_Bitmap
+					dc.l	0
+
+ShipShot			dc.w	HIDE
+					dc.w	0,0
+					dc.l	ShipShot_Bitmap
+					dc.l	0
+
+;Bitmaps
 
 InvaderA_Bitmap 	dc.w	24,16
 					dc.b    %00000000,%11111111,%00000000
