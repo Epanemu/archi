@@ -23,6 +23,13 @@ BITMAP2				equ		10
 HIDE				equ		0
 SHOW				equ		1
 
+SIZE_OF_SPRITE		equ		14
+
+;invaders
+INVADER_PER_LINE	equ		10
+INVADER_PER_COLUMN	equ		5
+INVADER_COUNT		equ		INVADER_PER_LINE*INVADER_PER_COLUMN
+
 ;speed constants
 SHIP_STEP			equ		4
 SHIP_SHOT_STEP		equ		4
@@ -44,8 +51,11 @@ vector_001          dc.l    Main
 
 					org		$500
 					
-Main				jsr		PrintShip
+Main				jsr		InitInvaders
+
+\loop				jsr		PrintShip
 					jsr		PrintShipShot
+					jsr		PrintInvaders
 					jsr		BufferToScreen
 					
 					jsr		MoveShip
@@ -53,7 +63,7 @@ Main				jsr		PrintShip
 					
 					jsr		NewShipShot
 					
-					bra		Main
+					bra		\loop
 
 
 ;-------------------------  Subroutines  ---------------------------
@@ -149,9 +159,12 @@ PixelToAdress		movem.l	d2/d1,-(a7)
 ;->	a0.l - address of the bitmap
 ;->	d1.w - abscissa in pixels	(x coordinate)
 ;->	d2.w - ordinate in pixels	(y coordinate)
-PrintBitmap			jsr		PixelToAdress
+PrintBitmap			move.l	d0,-(a7)
+
+					jsr		PixelToAdress
 					jsr		CopyBitmap
 					
+					move.l	(a7)+,d0
 					rts
 					
 					
@@ -425,19 +438,96 @@ NewShipShot			movem.l	a1/a2/d1/d2/d3,-(a7)
 \quit				movem.l	(a7)+,a1/a2/d1/d2/d3
 					rts
 					
+;->	d1.w - x position of the top left corner
+;->	d2.w - y position of the top left corner
+;->	a0.l - address of the structure of the first invader in the line
+;->	a1.l - address of the first bitmap of the invaders
+;->	a2.l - address of the second bitmap of the invaders
+InitInvaderLine		movem.l	a0/d0-d3,-(a7)
+
+					move.w	#INVADER_PER_LINE,d3
+					move.w	#32,d0
+					sub.w	WIDTH(a1),d0
+					divs.w	#2,d0
+					add.w	d0,d1
+					
+\loop				move.w	#SHOW,STATE(a0)
+					move.w	d1,X(a0)
+					move.w	d2,Y(a0)
+					move.l	a1,BITMAP1(a0)
+					move.l	a2,BITMAP2(a0)
+					
+					add.w	#32,d1
+					add.l	#SIZE_OF_SPRITE,a0
+					
+					subi.w	#1,d3
+					tst.w	d3
+					bne		\loop
+					
+					movem.l	(a7)+,a0/d0-d3
+					rts
+				
+				
+InitInvaders		movem.l	a0/d0-d2,-(a7)
+
+					move.w	(InvaderX),d1
+					move.w	(InvaderY),d2
+					lea		Invaders,a0
+					
+					lea		InvaderC_Bitmap,a1
+					lea		0,a2
+					
+					jsr		InitInvaderLine
+					add.l	#(INVADER_PER_LINE*SIZE_OF_SPRITE),a0
+					add.w	#32,d2
+					
+					move.w	#1,d0
+					lea		InvaderB_Bitmap,a1
+					lea		0,a2
+					
+\Bloop				jsr		InitInvaderLine
+					add.l	#(INVADER_PER_LINE*SIZE_OF_SPRITE),a0
+					add.w	#32,d2
+					dbra	d0,\Bloop
+					
+					move.w	#1,d0
+					lea		InvaderA_Bitmap,a1
+					lea		0,a2
+					
+\Aloop				jsr		InitInvaderLine
+					add.l	#(INVADER_PER_LINE*SIZE_OF_SPRITE),a0
+					add.w	#32,d2
+					dbra	d0,\Aloop
+					
+					movem.l	(a7)+,a0/d0-d2
+					rts
+					
+					
+PrintInvaders		movem.l	d0/a1,-(a7)
+					
+					move.w	#INVADER_COUNT,d0
+					lea		Invaders,a1
+					
+\loop				jsr		PrintSprite
+					add.l	#SIZE_OF_SPRITE,a1
+					subi.w	#1,d0
+					tst.w	d0
+					bne		\loop
+					
+					movem.l	(a7)+,d0/a1
+					rts
+					
 ;------------------------------ DATA -------------------------------		
 
-;Sprites
-					
-MovingSprite		dc.w	SHOW
-					dc.w	0,152			;coordinates
-					dc.l	InvaderB_Bitmap
-					dc.l	0
-					
-FixedSprite			dc.w	SHOW
-					dc.w	228,152			;coordinates
-					dc.l	InvaderA_Bitmap
-					dc.l	0
+;Invaders
+
+Invaders			ds.b	INVADER_COUNT*SIZE_OF_SPRITE
+
+InvaderX			dc.w	(VIDEO_WIDTH-(INVADER_PER_LINE*32))/2
+InvaderY			dc.w	32
+
+
+;Other sprites
 					
 Ship				dc.w	SHOW
 					dc.w	(VIDEO_WIDTH-24)/2,VIDEO_HEIGHT-32
