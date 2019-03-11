@@ -30,6 +30,13 @@ INVADER_PER_LINE	equ		10
 INVADER_PER_COLUMN	equ		5
 INVADER_COUNT		equ		INVADER_PER_LINE*INVADER_PER_COLUMN
 
+INVADER_STEP_X		equ		4
+INVADER_STEP_Y		equ		8
+INVADER_X_MIN		equ		0
+INVADER_X_MAX		equ		(VIDEO_WIDTH-(INVADER_PER_LINE*32))
+
+SKIP_MOVE_LIMIT		equ		8
+
 ;speed constants
 SHIP_STEP			equ		4
 SHIP_SHOT_STEP		equ		4
@@ -59,6 +66,7 @@ Main				jsr		InitInvaders
 					jsr		BufferToScreen
 					
 					jsr		MoveShip
+					jsr 	MoveInvaders
 					jsr		MoveShipShot
 					
 					jsr		NewShipShot
@@ -517,6 +525,61 @@ PrintInvaders		movem.l	d0/a1,-(a7)
 					movem.l	(a7)+,d0/a1
 					rts
 					
+;<-	d1.w - horizontal displacement of the top left corner (change of X)
+;<-	d2.w - vertical displacement of the top left corner (change of Y)
+GetInvaderStep		move.w 	(InvaderX),d1
+					add.w	(InvaderCurrentStep),d1
+					
+					cmpi.w	#INVADER_X_MAX,d1
+					bgt		\out
+					
+					cmpi.w	#INVADER_X_MIN,d1
+					blt		\out
+					
+					move.w	d1,(InvaderX)
+					move.w	(InvaderCurrentStep),d1
+					move.w	#0,d2
+					bra		\quit
+
+\out				neg.w	(InvaderCurrentStep)
+					add.w	#INVADER_STEP_Y,(InvaderY)
+					move.w	#0,d1
+					move.w	#INVADER_STEP_Y,d2
+					
+\quit				rts
+
+
+MoveAllInvaders		movem.l	d0-d2/a1,-(a7)
+					
+					jsr		GetInvaderStep
+					
+					move.w	#INVADER_COUNT,d0
+					lea		Invaders,a1
+					
+\loop				cmpi.w	#SHOW,STATE(a1)
+					bne		\skip
+					jsr		MoveSprite
+\skip				add.l	#SIZE_OF_SPRITE,a1
+					subi.w	#1,d0
+					tst.w	d0
+					bne		\loop
+					
+					movem.l	(a7)+,d0-d2/a1
+					rts
+					
+
+MoveInvaders		move.l	d1,-(a7)
+					
+					add.w	#1,(InvaderSkipMove)
+					cmpi.w	#SKIP_MOVE_LIMIT,(InvaderSkipMove)
+					blt		\quit
+					jsr		MoveAllInvaders
+					move.w	#0,(InvaderSkipMove)
+					
+\quit				move.l	(a7)+,d1
+					rts
+					
+
 ;------------------------------ DATA -------------------------------		
 
 ;Invaders
@@ -525,7 +588,9 @@ Invaders			ds.b	INVADER_COUNT*SIZE_OF_SPRITE
 
 InvaderX			dc.w	(VIDEO_WIDTH-(INVADER_PER_LINE*32))/2
 InvaderY			dc.w	32
+InvaderCurrentStep	dc.w	INVADER_STEP_X
 
+InvaderSkipMove		dc.w	SKIP_MOVE_LIMIT
 
 ;Other sprites
 					
