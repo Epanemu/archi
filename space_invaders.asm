@@ -65,11 +65,14 @@ Main				jsr		InitInvaders
 					jsr		PrintInvaders
 					jsr		BufferToScreen
 					
+					jsr		DestroyInvaders
+					
 					jsr		MoveShip
 					jsr 	MoveInvaders
 					jsr		MoveShipShot
 					
 					jsr		NewShipShot
+					jsr		SpeedInvaderUp
 					
 					bra		\loop
 
@@ -482,16 +485,16 @@ InitInvaders		movem.l	a0/d0-d2,-(a7)
 					move.w	(InvaderY),d2
 					lea		Invaders,a0
 					
-					lea		InvaderC_Bitmap,a1
-					lea		0,a2
+					lea		InvaderC1_Bitmap,a1
+					lea		InvaderC2_Bitmap,a2
 					
 					jsr		InitInvaderLine
 					add.l	#(INVADER_PER_LINE*SIZE_OF_SPRITE),a0
 					add.w	#32,d2
 					
 					move.w	#1,d0
-					lea		InvaderB_Bitmap,a1
-					lea		0,a2
+					lea		InvaderB1_Bitmap,a1
+					lea		InvaderB2_Bitmap,a2
 					
 \Bloop				jsr		InitInvaderLine
 					add.l	#(INVADER_PER_LINE*SIZE_OF_SPRITE),a0
@@ -499,8 +502,8 @@ InitInvaders		movem.l	a0/d0-d2,-(a7)
 					dbra	d0,\Bloop
 					
 					move.w	#1,d0
-					lea		InvaderA_Bitmap,a1
-					lea		0,a2
+					lea		InvaderA1_Bitmap,a1
+					lea		InvaderA2_Bitmap,a2
 					
 \Aloop				jsr		InitInvaderLine
 					add.l	#(INVADER_PER_LINE*SIZE_OF_SPRITE),a0
@@ -559,6 +562,7 @@ MoveAllInvaders		movem.l	d0-d2/a1,-(a7)
 \loop				cmpi.w	#SHOW,STATE(a1)
 					bne		\skip
 					jsr		MoveSprite
+					jsr		SwapBitmap
 \skip				add.l	#SIZE_OF_SPRITE,a1
 					subi.w	#1,d0
 					tst.w	d0
@@ -570,17 +574,75 @@ MoveAllInvaders		movem.l	d0-d2/a1,-(a7)
 
 MoveInvaders		move.l	d1,-(a7)
 					
+					move.w	(InvaderSpeed),d1
 					add.w	#1,(InvaderSkipMove)
-					cmpi.w	#SKIP_MOVE_LIMIT,(InvaderSkipMove)
-					blt		\quit
+					cmp.w	(InvaderSkipMove),d1
+					bge		\quit
 					jsr		MoveAllInvaders
 					move.w	#0,(InvaderSkipMove)
 					
 \quit				move.l	(a7)+,d1
 					rts
 					
+;->	a1.l - address of the sprite 
+SwapBitmap			move.l	d0,-(a7)
+					
+					move.l	BITMAP1(a1),d0
+					move.l	BITMAP2(a1),BITMAP1(a1)
+					move.l	d0,BITMAP2(a1)
+					
+					move.l	(a7)+,d0
+					rts
+					
+					
+DestroyInvaders		movem.l	a1/a2/d0,-(a7)
+					
+					move.w	#INVADER_COUNT,d0
+					lea		Invaders,a1
+					lea		ShipShot,a2
+					
+					;reudndant, but makes it faster
+					cmpi.w	#SHOW,STATE(a2)
+					bne		\quit
+					
+\loop				jsr		IsSpriteColliding
+					beq		\hide
+
+					add.l	#SIZE_OF_SPRITE,a1
+					subi.w	#1,d0
+					tst.w	d0
+					bne		\loop
+					bra		\quit
+
+\hide				move.w	#HIDE,STATE(a1)
+					move.w	#HIDE,STATE(a2)
+					subi.w	#1,(InvaderCount)
+
+\quit				movem.l	(a7)+,a1/a2/d0
+					rts
+
+
+SpeedInvaderUp		movem.l	a0/d0/d1,-(a7)
+					
+					move.w	#1,d0
+					move.w	(InvaderCount),d1
+					lea		SpeedLevels,a0
+					
+\loop				cmp.w	(a0)+,d1
+					ble		\quit
+					addi.w	#1,d0
+					bra		\loop
+					
+\quit				move.w	d0,(InvaderSpeed)
+					movem.l	(a7)+,d0/d1/a0
+					rts
 
 ;------------------------------ DATA -------------------------------		
+
+;Game data
+InvaderCount		dc.w	INVADER_COUNT
+InvaderSpeed		dc.w	SKIP_MOVE_LIMIT
+SpeedLevels			dc.w	1,5,10,15,20,25,35,50   
 
 ;Invaders
 
@@ -606,7 +668,7 @@ ShipShot			dc.w	HIDE
 
 ;Bitmaps
 
-InvaderA_Bitmap 	dc.w	24,16
+InvaderA1_Bitmap 	dc.w	24,16
 					dc.b    %00000000,%11111111,%00000000
 					dc.b    %00000000,%11111111,%00000000
 					dc.b    %00111111,%11111111,%11111100
@@ -618,13 +680,31 @@ InvaderA_Bitmap 	dc.w	24,16
 					dc.b    %11111111,%11111111,%11111111
 					dc.b    %11111111,%11111111,%11111111
 					dc.b    %00000011,%11000011,%11000000
-					dc.b    %00001111,%11000011,%11000000
+					dc.b    %00000011,%11000011,%11000000
 					dc.b    %00001111,%00111100,%11110000
 					dc.b    %00001111,%00111100,%11110000
 					dc.b    %11110000,%00000000,%00001111
 					dc.b    %11110000,%00000000,%00001111
+					
+InvaderA2_Bitmap 	dc.w	24,16
+					dc.b    %00000000,%11111111,%00000000
+					dc.b    %00000000,%11111111,%00000000
+					dc.b    %00111111,%11111111,%11111100
+					dc.b    %00111111,%11111111,%11111100
+					dc.b    %11111111,%11111111,%11111111
+					dc.b    %11111111,%11111111,%11111111
+					dc.b    %11111100,%00111100,%00111111
+					dc.b    %11111100,%00111100,%00111111
+					dc.b    %11111111,%11111111,%11111111
+					dc.b    %11111111,%11111111,%11111111
+					dc.b    %00001111,%11000011,%11110000
+					dc.b    %00001111,%11000011,%11110000
+					dc.b    %00111100,%00111100,%00111100
+					dc.b    %00111100,%00111100,%00111100
+					dc.b    %00001111,%00000000,%11110000
+					dc.b    %00001111,%00000000,%11110000
 
-InvaderB_Bitmap 	dc.w	22,16
+InvaderB1_Bitmap 	dc.w	22,16
 					dc.b    %00001100,%00000000,%11000000
 					dc.b    %00001100,%00000000,%11000000
 					dc.b    %00000011,%00000011,%00000000
@@ -642,7 +722,25 @@ InvaderB_Bitmap 	dc.w	22,16
 					dc.b    %00000011,%11001111,%00000000
 					dc.b    %00000011,%11001111,%00000000
 
-InvaderC_Bitmap 	dc.w	16,16
+InvaderB2_Bitmap 	dc.w	22,16
+					dc.b    %00001100,%00000000,%11000000
+					dc.b    %00001100,%00000000,%11000000
+					dc.b    %00000011,%00000011,%00000000
+					dc.b    %00000011,%00000011,%00000000
+					dc.b    %11001111,%11111111,%11001100
+					dc.b    %11001111,%11111111,%11001100
+					dc.b    %11001100,%11111100,%11001100
+					dc.b    %11001100,%11111100,%11001100
+					dc.b    %00111111,%11111111,%11110000
+					dc.b    %00111111,%11111111,%11110000
+					dc.b    %00001111,%11111111,%11000000
+					dc.b    %00001111,%11111111,%11000000
+					dc.b    %00001100,%00000000,%11000000
+					dc.b    %00001100,%00000000,%11000000
+					dc.b    %00110000,%00000000,%00110000
+					dc.b    %00110000,%00000000,%00110000
+
+InvaderC1_Bitmap 	dc.w	16,16
 					dc.b    %00000011,%11000000
 					dc.b    %00000011,%11000000
 					dc.b    %00001111,%11110000
@@ -659,6 +757,24 @@ InvaderC_Bitmap 	dc.w	16,16
 					dc.b    %11000000,%00000011
 					dc.b    %00110000,%00001100
 					dc.b    %00110000,%00001100
+					
+InvaderC2_Bitmap 	dc.w	16,16
+					dc.b    %00000011,%11000000
+					dc.b    %00000011,%11000000
+					dc.b    %00001111,%11110000
+					dc.b    %00001111,%11110000
+					dc.b    %00111111,%11111100
+					dc.b    %00111111,%11111100
+					dc.b    %11110011,%11001111
+					dc.b    %11110011,%11001111
+					dc.b    %11111111,%11111111
+					dc.b    %11111111,%11111111
+					dc.b    %00001100,%00110000
+					dc.b    %00001100,%00110000
+					dc.b    %00110011,%11001100
+					dc.b    %00110011,%11001100
+					dc.b    %11001100,%00110011
+					dc.b    %11001100,%00110011
 					
 Ship_Bitmap		 	dc.w	24,14
 					dc.b    %00000000,%00011000,%00000000
