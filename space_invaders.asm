@@ -35,6 +35,8 @@ INVADER_STEP_Y		equ		8
 INVADER_X_MIN		equ		0
 INVADER_X_MAX		equ		(VIDEO_WIDTH-(INVADER_PER_LINE*32))
 
+INVADER_SHOT_MAX	equ		5
+
 SKIP_MOVE_LIMIT		equ		8
 
 ;speed constants
@@ -58,7 +60,9 @@ vector_001          dc.l    Main
 
 					org		$500
 					
+					
 Main				jsr		InitInvaders
+					jsr		InitInvaderShots
 
 \loop				jsr		PrintShip
 					jsr		PrintShipShot
@@ -637,6 +641,71 @@ SpeedInvaderUp		movem.l	a0/d0/d1,-(a7)
 					movem.l	(a7)+,d0/d1/a0
 					rts
 
+
+InitInvaderShots	movem.l	a0/d0,-(a7)
+
+					lea		InvaderShots,a0
+					move.w	#INVADER_SHOT_MAX,d0
+					
+\loop				move.w	#HIDE,STATE(a0)
+					move.l	#InvaderShot1_Bitmap,BITMAP1(a0)
+					move.l	#InvaderShot2_Bitmap,BITMAP2(a0)
+
+					add.l	#SIZE_OF_SPRITE,a0
+					subi.w	#1,d0
+					bne		\loop
+					
+					movem.l	(a7)+,a0/d0
+					rts
+					
+;<-	Z    - true if there is a shot available
+;<-	a0.l - if there is a shot, address of that shot, invalid address otherwise
+GetHiddenShot		move.l	d0,-(a7)
+					
+					lea		InvaderShots,a0
+					move.w	INVADER_SHOT_MAX-1,d0
+
+\loop				cmpi.w	#HIDE,STATE(a0)
+					beq		\true
+					adda.l	SIZE_OF_SPRITE,a0
+					dbra.w	d0,\loop
+
+\false				move.l	(a7)+,d0
+					andi.b	#%11111011,ccr
+					rts
+					
+\true				move.l	(a7)+,d0
+					ori.b	#%00000100,ccr
+					rts
+					
+;->	a1.l - invader to connect to the shot
+ConnectInvaderShot	movem.l	a0-a2/d0/d1,-(a7)
+					
+					cmpi.w	#HIDE,STATE(a1)
+					beq		\quit
+					jsr		GetHiddenShot
+					bne		\quit
+
+					lea		BITMAP1(a0),a2
+					move.w	WIDTH(a2),d0
+					divu.w	#2,d0
+					
+					lea		BITMAP1(a1),a2
+					move.w	WIDTH(a2),d1
+					divu.w	#2,d1
+					add.w	X(a1),d1
+					sub.w	d0,d1
+					move.w	d1,X(a0)
+					
+					move.w	HEIGHT(a2),d1
+					add.w	Y(a1),d1
+					move.w	d1,Y(a0)
+
+					move.w	#SHOW,STATE(a0)
+
+\quit				movem.l	(a7)+,a0-a2/d0/d1
+					rts
+
 ;------------------------------ DATA -------------------------------		
 
 ;Game data
@@ -647,6 +716,7 @@ SpeedLevels			dc.w	1,5,10,15,20,25,35,50
 ;Invaders
 
 Invaders			ds.b	INVADER_COUNT*SIZE_OF_SPRITE
+InvaderShots		ds.b	SIZE_OF_SPRITE*INVADER_SHOT_MAX
 
 InvaderX			dc.w	(VIDEO_WIDTH-(INVADER_PER_LINE*32))/2
 InvaderY			dc.w	32
@@ -775,6 +845,22 @@ InvaderC2_Bitmap 	dc.w	16,16
 					dc.b    %00110011,%11001100
 					dc.b    %11001100,%00110011
 					dc.b    %11001100,%00110011
+					
+InvaderShot1_Bitmap	dc.w	4,6
+					dc.b    %11000000
+					dc.b    %11000000
+					dc.b    %00110000
+					dc.b    %00110000
+					dc.b    %11000000
+					dc.b    %11000000
+					
+InvaderShot2_Bitmap	dc.w	4,6
+					dc.b    %00110000
+					dc.b    %00110000
+					dc.b    %11000000
+					dc.b    %11000000
+					dc.b    %00110000
+					dc.b    %00110000					
 					
 Ship_Bitmap		 	dc.w	24,14
 					dc.b    %00000000,%00011000,%00000000
