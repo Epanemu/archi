@@ -42,6 +42,7 @@ SKIP_MOVE_LIMIT		equ		8
 ;speed constants
 SHIP_STEP			equ		4
 SHIP_SHOT_STEP		equ		4
+INVADER_SHOT_STEP	equ		1
 
 ;Keyboard
 SPACE_KEY			equ		$420
@@ -67,6 +68,7 @@ Main				jsr		InitInvaders
 \loop				jsr		PrintShip
 					jsr		PrintShipShot
 					jsr		PrintInvaders
+					jsr		PrintInvaderShots
 					jsr		BufferToScreen
 					
 					jsr		DestroyInvaders
@@ -74,8 +76,11 @@ Main				jsr		InitInvaders
 					jsr		MoveShip
 					jsr 	MoveInvaders
 					jsr		MoveShipShot
+					jsr		MoveInvaderShots
 					
 					jsr		NewShipShot
+					jsr		NewInvaderShots
+					
 					jsr		SpeedInvaderUp
 					
 					bra		\loop
@@ -113,11 +118,11 @@ PixelToByte			move.l	d2,-(a7)
 					move.l	(a7)+,d2
 					rts
 
-;->	a0.l - address of the bitmap
-;->	a1.l - address of the destination
-;->	d0.w - offset in pixels
-;->	d3.w - width of the line in bytes
-;<-	a0.l - address od the next line
+;<-	a0.l - address of the bitmap
+;<-	a1.l - address of the destination
+;<-	d0.w - offset in pixels
+;<-	d3.w - width of the line in bytes
+;->	a0.l - address od the next line
 CopyLine			movem.l	a1/d0/d1/d3,-(a7)
 \loop				clr.l	d1
 					move.b	(a0)+,d1
@@ -136,9 +141,9 @@ CopyLine			movem.l	a1/d0/d1/d3,-(a7)
 					rts
 
 
-;->	a0.l - address of the bitmap
-;->	a1.l - address of the destination
-;->	d0.w - offset in pixels
+;<-	a0.l - address of the bitmap
+;<-	a1.l - address of the destination
+;<-	d0.w - offset in pixels
 CopyBitmap			movem.l	a0/a1/d1/d3,-(a7)
 					move.w	WIDTH(a0),d3
 					move.w	HEIGHT(a0),d1
@@ -153,10 +158,10 @@ CopyBitmap			movem.l	a0/a1/d1/d3,-(a7)
 					rts
 			
 			
-;->	d1.w - abscissa in pixels	(x coordinate)
-;->	d2.w - ordinate in pixels	(y coordinate)
-;<-	a1.l - address of the pixel
-;<-	d0.w - offset of the pixels
+;<-	d1.w - abscissa in pixels	(x coordinate)
+;<-	d2.w - ordinate in pixels	(y coordinate)
+;->	a1.l - address of the pixel
+;->	d0.w - offset of the pixels
 PixelToAdress		movem.l	d2/d1,-(a7)
 					andi.l	#$0000ffff,d1
 					
@@ -171,9 +176,9 @@ PixelToAdress		movem.l	d2/d1,-(a7)
 					movem.l	(a7)+,d2/d1
 					rts
 					
-;->	a0.l - address of the bitmap
-;->	d1.w - abscissa in pixels	(x coordinate)
-;->	d2.w - ordinate in pixels	(y coordinate)
+;<-	a0.l - address of the bitmap
+;<-	d1.w - abscissa in pixels	(x coordinate)
+;<-	d2.w - ordinate in pixels	(y coordinate)
 PrintBitmap			move.l	d0,-(a7)
 
 					jsr		PixelToAdress
@@ -196,7 +201,7 @@ BufferToScreen		movem.l	a0/a1,-(a7)
 					movem.l	(a7)+,a0/a1
 					rts
 					
-;->	a1.l - address of the sprite					
+;<-	a1.l - address of the sprite					
 PrintSprite			movem.l	a1/d1/d2,-(a7)
 					tst.w	STATE(a1)
 					beq		\skip
@@ -208,9 +213,9 @@ PrintSprite			movem.l	a1/d1/d2,-(a7)
 \skip				movem.l	(a7)+,a1/d1/d2
 					rts
 					
-;->	a0.l - address of a bitamp
-;->	d1.w - X offset of a bitamp in px
-;<-	Z	 - true if out of bounds
+;<-	a0.l - address of a bitamp
+;<-	d1.w - X offset of a bitamp in px
+;->	Z	 - true if out of bounds
 IsOutOfX			move.l	d0,-(a7)
 					
 					tst.w	d1
@@ -229,9 +234,9 @@ IsOutOfX			move.l	d0,-(a7)
 					ori.b	#%00000100,ccr
 					rts
 
-;->	a0.l - address of a bitamp
-;->	d2.w - Y offset of a bitamp in px
-;<-	Z	 - true if out of bounds
+;<-	a0.l - address of a bitamp
+;<-	d2.w - Y offset of a bitamp in px
+;->	Z	 - true if out of bounds
 IsOutOfY			move.l	d0,-(a7)
 					
 					tst.w	d2
@@ -250,19 +255,19 @@ IsOutOfY			move.l	d0,-(a7)
 					ori.b	#%00000100,ccr
 					rts
 					
-;->	a0.l - address of a bitamp
-;->	d1.w - X offset of a bitamp in px
-;->	d2.w - Y offset of a bitamp in px
-;<-	Z	 - true if out of bounds
+;<-	a0.l - address of a bitamp
+;<-	d1.w - X offset of a bitamp in px
+;<-	d2.w - Y offset of a bitamp in px
+;->	Z	 - true if out of bounds
 IsOutOfScreen		jsr		IsOutOfX
 					beq		\quit
 					jsr		IsOutOfY
 \quit				rts
 
-;->	a1.l - address of a sprite
-;->	d1.w - relative displacement on the X axis
-;->	d2.w - relative displacement on the Y axis
-;<-	Z	 - false if not moved - out of bounds
+;<-	a1.l - address of a sprite
+;<-	d1.w - relative displacement on the X axis
+;<-	d2.w - relative displacement on the Y axis
+;->	Z	 - false if not moved - out of bounds
 MoveSprite			movem.l	d1/d2,-(a7)
 					
 					movea.l	BITMAP1(a1),a0
@@ -281,7 +286,7 @@ MoveSprite			movem.l	d1/d2,-(a7)
 \quit				movem.l	(a7)+,d1/d2
 					rts
 					
-;->	a1.l - address of a sprite	
+;<-	a1.l - address of a sprite	
 MoveSpriteKeyboard	movem.l	d1/d2,-(a7)
 					
 					clr.w	d1
@@ -308,11 +313,11 @@ MoveSpriteKeyboard	movem.l	d1/d2,-(a7)
 					movem.l	(a7)+,d1/d2
 					rts
 					
-;->	a0.l - Address of the sprite
-;<-	d1.w - Abscissa of the top left corner of the sprite (x)
-;<-	d2.w - Ordinate of the top left corner of the sprite (y)
-;<-	d3.w - Abscissa of the bottom right corner of the sprite (x)
-;<-	d4.w - Ordinate of the bottom right corner of the sprite (y)
+;<-	a0.l - Address of the sprite
+;->	d1.w - Abscissa of the top left corner of the sprite (x)
+;->	d2.w - Ordinate of the top left corner of the sprite (y)
+;->	d3.w - Abscissa of the bottom right corner of the sprite (x)
+;->	d4.w - Ordinate of the bottom right corner of the sprite (y)
 GetRectangle		move.l	a1,-(a7)
 
 					move.w	X(a0),d1
@@ -326,9 +331,9 @@ GetRectangle		move.l	a1,-(a7)
 					move.l	(a7)+,a1
 					rts
 					
-;->	a1.l - Address of the first sprite
-;->	a2.l - Address of the second sprite
-;<-	Z 	 - true(1) if sprites are colliding
+;<-	a1.l - Address of the first sprite
+;<-	a2.l - Address of the second sprite
+;->	Z 	 - true(1) if sprites are colliding
 IsSpriteColliding	movem.l	d0-d7/a0,-(a7)
 					
 					cmpi.w	#HIDE,STATE(a1)
@@ -453,11 +458,11 @@ NewShipShot			movem.l	a1/a2/d1/d2/d3,-(a7)
 \quit				movem.l	(a7)+,a1/a2/d1/d2/d3
 					rts
 					
-;->	d1.w - x position of the top left corner
-;->	d2.w - y position of the top left corner
-;->	a0.l - address of the structure of the first invader in the line
-;->	a1.l - address of the first bitmap of the invaders
-;->	a2.l - address of the second bitmap of the invaders
+;<-	d1.w - x position of the top left corner
+;<-	d2.w - y position of the top left corner
+;<-	a0.l - address of the structure of the first invader in the line
+;<-	a1.l - address of the first bitmap of the invaders
+;<-	a2.l - address of the second bitmap of the invaders
 InitInvaderLine		movem.l	a0/d0-d3,-(a7)
 
 					move.w	#INVADER_PER_LINE,d3
@@ -532,8 +537,8 @@ PrintInvaders		movem.l	d0/a1,-(a7)
 					movem.l	(a7)+,d0/a1
 					rts
 					
-;<-	d1.w - horizontal displacement of the top left corner (change of X)
-;<-	d2.w - vertical displacement of the top left corner (change of Y)
+;->	d1.w - horizontal displacement of the top left corner (change of X)
+;->	d2.w - vertical displacement of the top left corner (change of Y)
 GetInvaderStep		move.w 	(InvaderX),d1
 					add.w	(InvaderCurrentStep),d1
 					
@@ -588,7 +593,7 @@ MoveInvaders		move.l	d1,-(a7)
 \quit				move.l	(a7)+,d1
 					rts
 					
-;->	a1.l - address of the sprite 
+;<-	a1.l - address of the sprite 
 SwapBitmap			move.l	d0,-(a7)
 					
 					move.l	BITMAP1(a1),d0
@@ -658,16 +663,16 @@ InitInvaderShots	movem.l	a0/d0,-(a7)
 					movem.l	(a7)+,a0/d0
 					rts
 					
-;<-	Z    - true if there is a shot available
-;<-	a0.l - if there is a shot, address of that shot, invalid address otherwise
+;->	Z    - true if there is a shot available
+;->	a0.l - if there is a shot, address of that shot, invalid address otherwise
 GetHiddenShot		move.l	d0,-(a7)
 					
 					lea		InvaderShots,a0
-					move.w	INVADER_SHOT_MAX-1,d0
+					move.w	#INVADER_SHOT_MAX-1,d0
 
 \loop				cmpi.w	#HIDE,STATE(a0)
 					beq		\true
-					adda.l	SIZE_OF_SPRITE,a0
+					add.l	#SIZE_OF_SPRITE,a0
 					dbra.w	d0,\loop
 
 \false				move.l	(a7)+,d0
@@ -678,7 +683,7 @@ GetHiddenShot		move.l	d0,-(a7)
 					ori.b	#%00000100,ccr
 					rts
 					
-;->	a1.l - invader to connect to the shot
+;<-	a1.l - invader to connect to the shot
 ConnectInvaderShot	movem.l	a0-a2/d0/d1,-(a7)
 					
 					cmpi.w	#HIDE,STATE(a1)
@@ -686,11 +691,11 @@ ConnectInvaderShot	movem.l	a0-a2/d0/d1,-(a7)
 					jsr		GetHiddenShot
 					bne		\quit
 
-					lea		BITMAP1(a0),a2
+					move.l	BITMAP1(a0),a2
 					move.w	WIDTH(a2),d0
 					divu.w	#2,d0
 					
-					lea		BITMAP1(a1),a2
+					move.l	BITMAP1(a1),a2
 					move.w	WIDTH(a2),d1
 					divu.w	#2,d1
 					add.w	X(a1),d1
@@ -704,6 +709,71 @@ ConnectInvaderShot	movem.l	a0-a2/d0/d1,-(a7)
 					move.w	#SHOW,STATE(a0)
 
 \quit				movem.l	(a7)+,a0-a2/d0/d1
+					rts
+
+;->	d0.l - random number between 0 and 2047
+Random				move.l	\old,d0
+					muls.w	#16807,d0
+					and.l	#$7fffffff,d0
+					move.l	d0,\old
+					lsr.l	#4,d0
+					and.l	#$7ff,d0
+					rts
+\old				dc.l	435625
+
+
+NewInvaderShots		movem.l	d0/a1,-(a7)
+
+					jsr		Random
+					cmpi.l	#INVADER_COUNT,d0
+					bge		\quit
+					mulu.w	#SIZE_OF_SPRITE,d0
+					lea		Invaders,a1
+					add.l	d0,a1
+					jsr 	ConnectInvaderShot
+
+\quit				movem.l	(a7)+,d0/a1
+					rts
+					
+
+PrintInvaderShots	movem.l	d0/a1,-(a7)
+					
+					move.w	#INVADER_SHOT_MAX-1,d0
+					lea		InvaderShots,a1
+					
+\loop				jsr		PrintSprite
+					add.l	#SIZE_OF_SPRITE,a1
+					dbra	d0,\loop
+					
+					movem.l	(a7)+,d0/a1
+					rts
+					
+					
+MoveInvaderShots	movem.l	d0-d3/a1-a2,-(a7)
+
+					move.w	#INVADER_SHOT_MAX-1,d0
+					move.w	#INVADER_SHOT_STEP,d2
+					lea		InvaderShots,a1
+					
+\loop				cmp.w	#HIDE,STATE(a1)
+					beq		\next
+					
+					move.w	Y(a1),d3
+					move.l	BITMAP1(a1),a2
+					add.w	HEIGHT(a2),d3
+					cmp.w	#(VIDEO_HEIGHT-INVADER_SHOT_STEP),d3
+					blt		\can_move
+					
+					move.w	#HIDE,STATE(a1)
+					bra		\next
+				
+\can_move			clr.w	d1
+					jsr		MoveSprite
+					
+\next				add.l	#SIZE_OF_SPRITE,a1
+					dbra.w	d0,\loop
+					
+\quit				movem.l	(a7)+,d0-d3/a1-a2
 					rts
 
 ;------------------------------ DATA -------------------------------		
