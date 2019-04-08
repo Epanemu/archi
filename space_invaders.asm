@@ -36,6 +36,7 @@ INVADER_X_MIN		equ		0
 INVADER_X_MAX		equ		(VIDEO_WIDTH-(INVADER_PER_LINE*32))
 
 INVADER_SHOT_MAX	equ		5
+SKIP_SWAP_SHOT		equ		6
 
 SKIP_MOVE_LIMIT		equ		8
 
@@ -83,8 +84,10 @@ Main				jsr		InitInvaders
 					
 					jsr		SpeedInvaderUp
 					
-					bra		\loop
+					jsr		IsInvaderTooLow
+					bne		\loop
 
+					illegal
 
 ;-------------------------  Subroutines  ---------------------------
 
@@ -773,9 +776,87 @@ MoveInvaderShots	movem.l	d0-d3/a1-a2,-(a7)
 \next				add.l	#SIZE_OF_SPRITE,a1
 					dbra.w	d0,\loop
 					
+					jsr		SwapInvaderShots
+					
 \quit				movem.l	(a7)+,d0-d3/a1-a2
 					rts
+					
+					
+SwapInvaderShots	movem.l	d7/a1,-(a7)
+	
+					cmp.w	#SKIP_SWAP_SHOT,(InvaderSwapShot)
+					bne		\quit
+	
+					move.w	#INVADER_SHOT_MAX-1,d7
+					lea		InvaderShots,a1
+					
+\loop				jsr		SwapBitmap
+					adda.l	#SIZE_OF_SPRITE,a1
+					dbra	d7,\loop
+					
+					move.w	#0,(InvaderSwapShot)
 
+\quit				addi.w	#1,(InvaderSwapShot)
+					movem.l	(a7)+,d7/a1
+					rts
+					
+;->	Z - true(0) if ship is hit, false(0) if not
+IsShipHit			movem.l	d0/a1/a2,-(a7)
+					
+					move.w	#INVADER_SHOT_MAX-1,d0
+					lea		Ship,a1
+					lea		InvaderShots,a2
+					
+\loop				jsr		IsSpriteColliding
+					beq		\quit
+
+					adda.l	#SIZE_OF_SPRITE,a2
+					dbra	d0,\loop
+				
+					andi.b	#%11111011,ccr
+					
+\quit				movem.l	(a7)+,d0/a1/a2
+					rts
+	
+;->	Z - true(0) if ship collides with an invader, false(0) if not
+IsShipColliding		movem.l	d0/a1/a2,-(a7)
+					
+					move.w	#INVADER_COUNT-1,d0
+					lea		Ship,a1
+					lea		Invaders,a2
+					
+\loop				jsr		IsSpriteColliding
+					beq		\quit
+
+					adda.l	#SIZE_OF_SPRITE,a2
+					dbra	d0,\loop
+				
+					andi.b	#%11111011,ccr
+					
+\quit				movem.l	(a7)+,d0/a1/a2
+					rts
+					
+					
+;->	Z - true(0) if at least one invader is too low, false(0) if none
+IsInvaderTooLow		movem.l	d0/a1,-(a7)
+					
+					move.w	#INVADER_COUNT-1,d0
+					lea		Invaders,a1
+					
+					;Under 280 it is too low
+\loop				cmpi.w	#280,Y(a1)
+					bgt		\true
+					
+					adda.l	#SIZE_OF_SPRITE,a1
+					dbra	d0,\loop
+	
+\false				andi.b	#%11111011,ccr
+					bra		\quit
+					
+\true				ori.b	#%00000100,ccr
+
+\quit				movem.l	(a7)+,d0/a1
+					rts
 ;------------------------------ DATA -------------------------------		
 
 ;Game data
@@ -787,6 +868,8 @@ SpeedLevels			dc.w	1,5,10,15,20,25,35,50
 
 Invaders			ds.b	INVADER_COUNT*SIZE_OF_SPRITE
 InvaderShots		ds.b	SIZE_OF_SPRITE*INVADER_SHOT_MAX
+
+InvaderSwapShot		dc.w	SKIP_SWAP_SHOT
 
 InvaderX			dc.w	(VIDEO_WIDTH-(INVADER_PER_LINE*32))/2
 InvaderY			dc.w	32
